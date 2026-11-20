@@ -94,6 +94,15 @@ const complaintSchema = new mongoose.Schema(
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
             default: null
+        },
+        isPossibleDuplicate: {
+            type: Boolean,
+            default: false
+        },
+        duplicateOf: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Complaint",
+            default: null
         }
     },
     {

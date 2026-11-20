@@ -3,6 +3,7 @@ const cloudinary = require("../config/cloudinary");
 const mongoose = require("mongoose");
 const { getDepartmentForCategory } = require("../utils/departmentMapping");
 const { calculatePriority } = require("../utils/priorityMapping");
+const { findBestDuplicate } = require("../utils/duplicateDetection");
 
 const allowedCategories = ["Road", "Garbage", "Water", "Streetlight", "Other"];
 const allowedStatuses = ["Pending", "In Progress", "Resolved", "Rejected"];
@@ -135,7 +136,9 @@ const createComplaint = async (req, res) => {
             reportedBy: req.user.id,
             assignedDepartment: getDepartmentForCategory(category),
             assignedAt: new Date(),
-            assignedBy: null
+            assignedBy: null,
+            isPossibleDuplicate: false,
+            duplicateOf: null
         };
 
         if (location !== undefined) {
@@ -172,6 +175,33 @@ const createComplaint = async (req, res) => {
                 type: "Point",
                 coordinates: [longitude, latitude]
             };
+
+            const duplicateCandidates = await Complaint.find({
+                category,
+                status: { $nin: ["Resolved", "Rejected"] },
+                location: {
+                    $near: {
+                        $geometry: {
+                            type: "Point",
+                            coordinates: [longitude, latitude]
+                        },
+                        $maxDistance: 150
+                    }
+                }
+            })
+                .select("title description")
+                .lean();
+
+            const duplicateMatch = findBestDuplicate(
+                duplicateCandidates,
+                trimmedTitle,
+                trimmedDescription
+            );
+
+            if (duplicateMatch) {
+                complaintData.isPossibleDuplicate = true;
+                complaintData.duplicateOf = duplicateMatch.duplicate._id;
+            }
         }
 
         if (req.file) {
@@ -223,7 +253,14 @@ const createComplaint = async (req, res) => {
             success: true,
             message: "Complaint created successfully",
             data: {
-                complaint
+                complaint,
+                duplicate: {
+                    isPossibleDuplicate: complaint.isPossibleDuplicate,
+                    duplicateOf: complaint.duplicateOf,
+                    message: complaint.isPossibleDuplicate
+                        ? "This complaint may be similar to an existing nearby complaint"
+                        : "No possible duplicate detected"
+                }
             }
         });
     } catch (error) {
