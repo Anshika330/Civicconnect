@@ -74,6 +74,26 @@ const complaintSchema = new mongoose.Schema(
                 type: String,
                 trim: true
             }
+        },
+        assignedDepartment: {
+            type: String,
+            enum: [
+                "Public Works Department",
+                "Sanitation Department",
+                "Water Department",
+                "Electrical Department",
+                "General Department"
+            ],
+            default: null
+        },
+        assignedAt: {
+            type: Date,
+            default: null
+        },
+        assignedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            default: null
         }
     },
     {

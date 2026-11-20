@@ -5,6 +5,13 @@ const mongoose = require("mongoose");
 const allowedCategories = ["Road", "Garbage", "Water", "Streetlight", "Other"];
 const allowedStatuses = ["Pending", "In Progress", "Resolved", "Rejected"];
 const allowedPriorities = ["Low", "Medium", "High", "Critical"];
+const allowedDepartments = [
+    "Public Works Department",
+    "Sanitation Department",
+    "Water Department",
+    "Electrical Department",
+    "General Department"
+];
 
 const parsePagination = (query) => {
     if (
@@ -584,6 +591,84 @@ const updateComplaintPriority = async (req, res) => {
     }
 };
 
+const assignComplaint = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { department } = req.body || {};
+
+        if (
+            typeof id !== "string" ||
+            !/^[a-fA-F0-9]{24}$/.test(id) ||
+            !mongoose.Types.ObjectId.isValid(id)
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid complaint ID"
+            });
+        }
+
+        if (!department || !allowedDepartments.includes(department)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid or missing department"
+            });
+        }
+
+        if (!req.user || !req.user.id) {
+            return res.status(401).json({
+                success: false,
+                message: "Authentication required"
+            });
+        }
+
+        const complaint = await Complaint.findByIdAndUpdate(
+            id,
+            {
+                assignedDepartment: department,
+                assignedAt: new Date(),
+                assignedBy: req.user.id
+            },
+            { new: true, runValidators: true }
+        );
+
+        if (!complaint) {
+            return res.status(404).json({
+                success: false,
+                message: "Complaint not found"
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Complaint assigned successfully",
+            data: {
+                complaint
+            }
+        });
+    } catch (error) {
+        if (error.name === "ValidationError") {
+            const messages = Object.values(error.errors).map((item) => item.message);
+            return res.status(400).json({
+                success: false,
+                message: messages.join(", ")
+            });
+        }
+
+        if (error.name === "CastError") {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid complaint assignment data"
+            });
+        }
+
+        console.error("Complaint assignment failed:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Unable to assign complaint"
+        });
+    }
+};
+
 module.exports = {
     createComplaint,
     getMyComplaints,
@@ -591,5 +676,6 @@ module.exports = {
     getComplaintStats,
     getComplaintById,
     updateComplaintStatus,
-    updateComplaintPriority
+    updateComplaintPriority,
+    assignComplaint
 };
