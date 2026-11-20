@@ -1,6 +1,7 @@
 const Complaint = require("../models/Complaint");
 const cloudinary = require("../config/cloudinary");
 const mongoose = require("mongoose");
+const { getDepartmentForCategory } = require("../utils/departmentMapping");
 
 const allowedCategories = ["Road", "Garbage", "Water", "Streetlight", "Other"];
 const allowedStatuses = ["Pending", "In Progress", "Resolved", "Rejected"];
@@ -129,7 +130,10 @@ const createComplaint = async (req, res) => {
             title: trimmedTitle,
             description: trimmedDescription,
             category,
-            reportedBy: req.user.id
+            reportedBy: req.user.id,
+            assignedDepartment: getDepartmentForCategory(category),
+            assignedAt: new Date(),
+            assignedBy: null
         };
 
         if (location !== undefined) {
