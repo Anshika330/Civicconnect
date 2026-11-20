@@ -4,7 +4,8 @@ const {
     getMyComplaints,
     getAllComplaints,
     getComplaintById,
-    updateComplaintStatus
+    updateComplaintStatus,
+    updateComplaintPriority
 } = require("../controllers/complaintController");
 const { authenticate, authorizeRoles } = require("../middleware/authMiddleware");
 const { upload, handleUploadError } = require("../middleware/uploadMiddleware");
@@ -34,6 +35,13 @@ router.patch(
     authenticate,
     authorizeRoles("authority"),
     updateComplaintStatus
+);
+
+router.patch(
+    "/:id/priority",
+    authenticate,
+    authorizeRoles("authority"),
+    updateComplaintPriority
 );
 
 router.get("/:id", authenticate, getComplaintById);
