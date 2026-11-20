@@ -1,4 +1,5 @@
 const User = require("../models/users");
+const jwt = require("jsonwebtoken");
 
 const registerCitizen = async (req, res) => {
     try {
@@ -87,4 +88,81 @@ const registerCitizen = async (req, res) => {
     }
 };
 
-module.exports = { registerCitizen };
+const login = async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        if (!email || !password) {
+            return res.status(400).json({
+                success: false,
+                message: "Email and password are required"
+            });
+        }
+
+        const normalizedEmail = String(email).trim().toLowerCase();
+
+        if (!normalizedEmail) {
+            return res.status(400).json({
+                success: false,
+                message: "Email and password are required"
+            });
+        }
+
+        const user = await User.findOne({ email: normalizedEmail });
+        if (!user) {
+            return res.status(401).json({
+                success: false,
+                message: "Invalid credentials"
+            });
+        }
+
+        const isPasswordValid = await user.comparePassword(String(password));
+        if (!isPasswordValid) {
+            return res.status(401).json({
+                success: false,
+                message: "Invalid credentials"
+            });
+        }
+
+        const jwtSecret = process.env.JWT_SECRET;
+        if (!jwtSecret) {
+            console.error("JWT_SECRET is not configured");
+            return res.status(500).json({
+                success: false,
+                message: "Authentication service is unavailable"
+            });
+        }
+
+        const token = jwt.sign(
+            {
+                id: user._id,
+                role: user.role
+            },
+            jwtSecret,
+            { expiresIn: "1d" }
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: "Login successful",
+            data: {
+                token,
+                user: {
+                    id: user._id,
+                    name: user.name,
+                    email: user.email,
+                    phone: user.phone,
+                    role: user.role
+                }
+            }
+        });
+    } catch (error) {
+        console.error("Login failed:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Unable to login"
+        });
+    }
+};
+
+module.exports = { registerCitizen, login };
