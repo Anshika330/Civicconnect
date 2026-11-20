@@ -669,6 +669,15 @@ const updateComplaintStatus = async (req, res) => {
             });
         }
 
+        const io = req.app.get("io");
+        if (io) {
+            io.to(`citizen:${complaint.reportedBy}`).emit("complaintStatusUpdated", {
+                complaintId: String(complaint._id),
+                status: complaint.status,
+                updatedAt: complaint.updatedAt
+            });
+        }
+
         return res.status(200).json({
             success: true,
             message: "Complaint status updated successfully",

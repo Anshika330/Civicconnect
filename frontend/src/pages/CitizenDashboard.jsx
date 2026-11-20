@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
+import { io } from 'socket.io-client'
 import { getMyComplaints } from '../services/complaintService'
+import { getSession } from '../services/authStorage'
 
 function CitizenDashboard({ user, onLogout, navigate }) {
   const [complaints, setComplaints] = useState([])
@@ -33,6 +35,44 @@ function CitizenDashboard({ user, onLogout, navigate }) {
       active = false
     }
   }, [pagination.page, pagination.limit])
+
+  useEffect(() => {
+    const session = getSession()
+    if (!session?.token || session.user?.role !== 'citizen') {
+      return undefined
+    }
+
+    const socket = io(
+      import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000',
+      {
+        auth: { token: session.token },
+        transports: ['websocket', 'polling']
+      }
+    )
+
+    const handleStatusUpdate = (update) => {
+      if (!update?.complaintId || !update.status) return
+
+      setComplaints((currentComplaints) =>
+        currentComplaints.map((complaint) =>
+          String(complaint._id) === String(update.complaintId)
+            ? {
+                ...complaint,
+                status: update.status,
+                updatedAt: update.updatedAt || complaint.updatedAt
+              }
+            : complaint
+        )
+      )
+    }
+
+    socket.on('complaintStatusUpdated', handleStatusUpdate)
+
+    return () => {
+      socket.off('complaintStatusUpdated', handleStatusUpdate)
+      socket.disconnect()
+    }
+  }, [])
 
   const formatDate = (value) => {
     if (!value) return '-'
