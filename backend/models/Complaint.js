@@ -64,6 +64,16 @@ const complaintSchema = new mongoose.Schema(
             type: String,
             enum: ["Low", "Medium", "High"],
             default: "Medium"
+        },
+        image: {
+            url: {
+                type: String,
+                trim: true
+            },
+            publicId: {
+                type: String,
+                trim: true
+            }
         }
     },
     {
