@@ -337,6 +337,85 @@ const getAllComplaints = async (req, res) => {
     }
 };
 
+const getComplaintStats = async (req, res) => {
+    try {
+        const [aggregateStats, categoryStats] = await Promise.all([
+            Complaint.aggregate([
+                {
+                    $facet: {
+                        total: [
+                            { $count: "count" }
+                        ],
+                        status: [
+                            { $group: { _id: "$status", count: { $sum: 1 } } }
+                        ],
+                        priority: [
+                            { $group: { _id: "$priority", count: { $sum: 1 } } }
+                        ]
+                    }
+                }
+            ]),
+            Complaint.aggregate([
+                {
+                    $group: {
+                        _id: "$category",
+                        count: { $sum: 1 }
+                    }
+                }
+            ])
+        ]);
+
+        const stats = aggregateStats[0] || {
+            total: [],
+            status: [],
+            priority: []
+        };
+
+        const statusCounts = Object.fromEntries(
+            allowedStatuses.map((status) => [status, 0])
+        );
+        for (const item of stats.status) {
+            if (Object.prototype.hasOwnProperty.call(statusCounts, item._id)) {
+                statusCounts[item._id] = item.count;
+            }
+        }
+
+        const priorityCounts = Object.fromEntries(
+            allowedPriorities.map((priority) => [priority, 0])
+        );
+        for (const item of stats.priority) {
+            if (Object.prototype.hasOwnProperty.call(priorityCounts, item._id)) {
+                priorityCounts[item._id] = item.count;
+            }
+        }
+
+        const categoryCounts = Object.fromEntries(
+            allowedCategories.map((category) => [category, 0])
+        );
+        for (const item of categoryStats) {
+            if (Object.prototype.hasOwnProperty.call(categoryCounts, item._id)) {
+                categoryCounts[item._id] = item.count;
+            }
+        }
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                total: stats.total[0]?.count || 0,
+                status: statusCounts,
+                priority: priorityCounts,
+                category: categoryCounts
+            }
+        });
+    } catch (error) {
+        console.error("Complaint statistics retrieval failed:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Unable to retrieve complaint statistics"
+        });
+    }
+};
+
 const getComplaintById = async (req, res) => {
     try {
         const { id } = req.params;
@@ -509,6 +588,7 @@ module.exports = {
     createComplaint,
     getMyComplaints,
     getAllComplaints,
+    getComplaintStats,
     getComplaintById,
     updateComplaintStatus,
     updateComplaintPriority

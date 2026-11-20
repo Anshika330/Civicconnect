@@ -3,6 +3,7 @@ const {
     createComplaint,
     getMyComplaints,
     getAllComplaints,
+    getComplaintStats,
     getComplaintById,
     updateComplaintStatus,
     updateComplaintPriority
@@ -28,6 +29,13 @@ router.get(
     authenticate,
     authorizeRoles("authority"),
     getAllComplaints
+);
+
+router.get(
+    "/stats",
+    authenticate,
+    authorizeRoles("authority"),
+    getComplaintStats
 );
 
 router.patch(
