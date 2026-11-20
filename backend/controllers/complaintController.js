@@ -67,6 +67,125 @@ const buildFilterQuery = (query) => {
     return { filter };
 };
 
+const escapeRegex = (value) => {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+};
+
+const parseFilterDate = (value, isEndDate) => {
+    if (typeof value !== "string") {
+        return null;
+    }
+
+    const dateOnlyMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (dateOnlyMatch) {
+        const year = Number(dateOnlyMatch[1]);
+        const month = Number(dateOnlyMatch[2]);
+        const day = Number(dateOnlyMatch[3]);
+        const date = new Date(year, month - 1, day);
+
+        if (
+            date.getFullYear() !== year ||
+            date.getMonth() !== month - 1 ||
+            date.getDate() !== day
+        ) {
+            return null;
+        }
+
+        if (isEndDate) {
+            date.setHours(23, 59, 59, 999);
+        } else {
+            date.setHours(0, 0, 0, 0);
+        }
+        return date;
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(value)) {
+        return null;
+    }
+
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const buildAuthorityFilterQuery = (query) => {
+    const filter = {};
+
+    if (query.status !== undefined) {
+        if (!allowedStatuses.includes(query.status)) {
+            return { error: "Invalid status filter" };
+        }
+        filter.status = query.status;
+    }
+
+    if (query.category !== undefined) {
+        if (!allowedCategories.includes(query.category)) {
+            return { error: "Invalid category filter" };
+        }
+        filter.category = query.category;
+    }
+
+    if (query.priority !== undefined) {
+        if (!allowedPriorities.includes(query.priority)) {
+            return { error: "Invalid priority filter" };
+        }
+        filter.priority = query.priority;
+    }
+
+    if (query.assignedDepartment !== undefined) {
+        if (!allowedDepartments.includes(query.assignedDepartment)) {
+            return { error: "Invalid assignedDepartment filter" };
+        }
+        filter.assignedDepartment = query.assignedDepartment;
+    }
+
+    if (query.search !== undefined) {
+        if (typeof query.search !== "string") {
+            return { error: "Search must be a single text value" };
+        }
+        const search = String(query.search).trim();
+        if (search.length === 0) {
+            return { error: "Search must not be empty" };
+        }
+        if (search.length > 100) {
+            return { error: "Search must be 100 characters or fewer" };
+        }
+
+        const safeSearch = escapeRegex(search);
+        filter.$or = [
+            { title: { $regex: safeSearch, $options: "i" } },
+            { description: { $regex: safeSearch, $options: "i" } }
+        ];
+    }
+
+    const startDate = query.startDate === undefined
+        ? null
+        : parseFilterDate(query.startDate, false);
+    const endDate = query.endDate === undefined
+        ? null
+        : parseFilterDate(query.endDate, true);
+
+    if (query.startDate !== undefined && !startDate) {
+        return { error: "Invalid startDate format" };
+    }
+    if (query.endDate !== undefined && !endDate) {
+        return { error: "Invalid endDate format" };
+    }
+    if (startDate && endDate && startDate > endDate) {
+        return { error: "startDate must not be after endDate" };
+    }
+    if (startDate || endDate) {
+        filter.createdAt = {};
+        if (startDate) {
+            filter.createdAt.$gte = startDate;
+        }
+        if (endDate) {
+            filter.createdAt.$lte = endDate;
+        }
+    }
+
+    return { filter };
+};
+
 const paginationResponse = (res, complaints, total, page, limit) => {
     return res.status(200).json({
         success: true,
@@ -353,7 +472,7 @@ const getAllComplaints = async (req, res) => {
             });
         }
 
-        const filterResult = buildFilterQuery(req.query);
+        const filterResult = buildAuthorityFilterQuery(req.query);
         if (filterResult.error) {
             return res.status(400).json({
                 success: false,
