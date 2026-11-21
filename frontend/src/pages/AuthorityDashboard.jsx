@@ -6,6 +6,7 @@ import {
   updateComplaintPriority,
   updateComplaintStatus
 } from '../services/complaintService'
+import AuthorityComplaintMap from '../components/AuthorityComplaintMap'
 
 const initialFilters = {
   status: '',
@@ -45,6 +46,8 @@ function AuthorityDashboard({ user, onLogout }) {
   const [error, setError] = useState('')
   const [actionMessage, setActionMessage] = useState('')
   const [actionId, setActionId] = useState('')
+  const [mapComplaints, setMapComplaints] = useState([])
+  const [mapLoading, setMapLoading] = useState(true)
 
   const loadStats = useCallback(async () => {
     setStatsLoading(true)
@@ -112,6 +115,67 @@ function AuthorityDashboard({ user, onLogout }) {
       active = false
     }
   }, [filters])
+
+  useEffect(() => {
+    let active = true
+
+    const loadAllMapComplaints = async () => {
+      setMapLoading(true)
+
+      const mapFilters = {
+        status: filters.status,
+        category: filters.category,
+        priority: filters.priority,
+        assignedDepartment: filters.assignedDepartment,
+        search: filters.search,
+        startDate: filters.startDate,
+        endDate: filters.endDate,
+        page: 1,
+        limit: 100
+      }
+
+      try {
+        const firstResponse = await getComplaints(mapFilters)
+        let allComplaints = [...firstResponse.data.complaints]
+        const firstPagination = firstResponse.data.pagination
+        const remainingPages = Math.max(
+          0,
+          (firstPagination.totalPages || 0) - 1
+        )
+
+        for (let page = 2; page <= remainingPages + 1; page += 1) {
+          const response = await getComplaints({
+            ...mapFilters,
+            page
+          })
+          allComplaints = [...allComplaints, ...response.data.complaints]
+        }
+
+        const uniqueComplaints = Array.from(
+          new Map(
+            allComplaints
+              .filter((complaint) => complaint?._id)
+              .map((complaint) => [complaint._id, complaint])
+          ).values()
+        )
+
+        if (active) setMapComplaints(uniqueComplaints)
+      } catch (requestError) {
+        if (active) {
+          setMapComplaints([])
+          setError(requestError.message)
+        }
+      } finally {
+        if (active) setMapLoading(false)
+      }
+    }
+
+    loadAllMapComplaints()
+
+    return () => {
+      active = false
+    }
+  }, [filters.status, filters.category, filters.priority, filters.assignedDepartment, filters.search, filters.startDate, filters.endDate])
 
   const updateFilter = (event) => {
     const { name, value } = event.target
@@ -309,6 +373,10 @@ function AuthorityDashboard({ user, onLogout }) {
               Clear filters
             </button>
           </div>
+
+          {!loading && !mapLoading && (
+            <AuthorityComplaintMap complaints={mapComplaints} />
+          )}
 
           {loading ? (
             <div className="table-state">Loading complaints...</div>
