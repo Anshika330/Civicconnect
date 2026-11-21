@@ -8,6 +8,13 @@ const allowedCategories = [
     "Other"
 ];
 
+const allowedPriorities = [
+    "Low",
+    "Medium",
+    "High",
+    "Critical"
+];
+
 const allowedMimeTypes = [
     "image/jpeg",
     "image/png",
@@ -174,7 +181,179 @@ const classifyCivicImage = async (imageBuffer, mimeType) => {
     }
 };
 
+const predictComplaintPriority = async (
+    title,
+    description,
+    category,
+    imageBuffer,
+    mimeType
+) => {
+    if (
+        typeof title !== "string" ||
+        !title.trim() ||
+        typeof description !== "string" ||
+        !description.trim() ||
+        !allowedCategories.includes(category)
+    ) {
+        throw new ClassificationError(
+            "Valid title, description and category are required",
+            "INVALID_PRIORITY_INPUT"
+        );
+    }
+
+    if (imageBuffer && !Buffer.isBuffer(imageBuffer)) {
+        throw new ClassificationError(
+            "A valid image buffer is required",
+            "INVALID_IMAGE"
+        );
+    }
+
+    if (imageBuffer && imageBuffer.length === 0) {
+        throw new ClassificationError(
+            "A valid image buffer is required",
+            "INVALID_IMAGE"
+        );
+    }
+
+    if (imageBuffer && imageBuffer.length > maxImageSize) {
+        throw new ClassificationError(
+            "Image size must not exceed 5 MB",
+            "IMAGE_TOO_LARGE"
+        );
+    }
+
+    if (imageBuffer && !allowedMimeTypes.includes(mimeType)) {
+        throw new ClassificationError(
+            "Only JPEG, PNG and WebP images are supported",
+            "INVALID_IMAGE_TYPE"
+        );
+    }
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+        throw new ClassificationError(
+            "Gemini priority prediction is not configured",
+            "PRIORITY_PREDICTION_NOT_CONFIGURED"
+        );
+    }
+
+    try {
+        const ai = new GoogleGenAI({
+            apiKey,
+            httpOptions: {
+                timeout: 30000,
+                retryOptions: {
+                    attempts: 0
+                }
+            }
+        });
+
+        const parts = [
+            {
+                text: [
+                    "Predict the urgency priority of this civic complaint.",
+                    `Title: ${title.trim()}`,
+                    `Description: ${description.trim()}`,
+                    `Category: ${category}`,
+                    "Choose exactly one priority:",
+                    allowedPriorities.join(", "),
+                    "Use Critical only for immediate danger or life-threatening emergencies.",
+                    "Use High for major infrastructure damage or serious public safety risks.",
+                    "Use Low for minor cleanliness or small maintenance issues.",
+                    "Use Medium for normal actionable complaints or when uncertain.",
+                    "Return JSON with suggestedPriority, confidence from 0 to 1, and a short reason.",
+                    "Do not use Markdown."
+                ].join("\n")
+            }
+        ];
+
+        if (imageBuffer) {
+            parts.push({
+                inlineData: {
+                    mimeType,
+                    data: imageBuffer.toString("base64")
+                }
+            });
+        }
+
+        const response = await ai.models.generateContent({
+            model: modelName,
+            contents: [
+                {
+                    role: "user",
+                    parts
+                }
+            ],
+            config: {
+                responseMimeType: "application/json",
+                responseJsonSchema: {
+                    type: "object",
+                    properties: {
+                        suggestedPriority: {
+                            type: "string",
+                            enum: allowedPriorities
+                        },
+                        confidence: {
+                            type: "number",
+                            minimum: 0,
+                            maximum: 1
+                        },
+                        reason: {
+                            type: "string"
+                        }
+                    },
+                    required: ["suggestedPriority", "confidence", "reason"]
+                }
+            }
+        });
+
+        const parsed = parseJsonResponse(response.text);
+
+        if (!allowedPriorities.includes(parsed.suggestedPriority)) {
+            throw new ClassificationError(
+                "Gemini returned an invalid priority",
+                "INVALID_PRIORITY_RESPONSE"
+            );
+        }
+
+        if (
+            typeof parsed.confidence !== "number" ||
+            !Number.isFinite(parsed.confidence) ||
+            parsed.confidence < 0 ||
+            parsed.confidence > 1
+        ) {
+            throw new ClassificationError(
+                "Gemini returned an invalid confidence score",
+                "INVALID_PRIORITY_CONFIDENCE"
+            );
+        }
+
+        if (typeof parsed.reason !== "string" || !parsed.reason.trim()) {
+            throw new ClassificationError(
+                "Gemini returned no valid priority reason",
+                "INVALID_PRIORITY_REASON"
+            );
+        }
+
+        return {
+            suggestedPriority: parsed.suggestedPriority,
+            confidence: parsed.confidence,
+            reason: parsed.reason.trim()
+        };
+    } catch (error) {
+        if (error instanceof ClassificationError) {
+            throw error;
+        }
+
+        throw new ClassificationError(
+            "Unable to predict complaint priority",
+            "PRIORITY_PREDICTION_API_ERROR"
+        );
+    }
+};
+
 module.exports = {
     classifyCivicImage,
+    predictComplaintPriority,
     ClassificationError
 };

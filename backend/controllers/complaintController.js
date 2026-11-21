@@ -6,6 +6,7 @@ const { calculatePriority } = require("../utils/priorityMapping");
 const { findBestDuplicate } = require("../utils/duplicateDetection");
 const {
     classifyCivicImage,
+    predictComplaintPriority,
     ClassificationError
 } = require("../services/imageClassificationService");
 
@@ -251,11 +252,30 @@ const createComplaint = async (req, res) => {
             });
         }
 
+        let predictedPriority = calculatePriority(
+            category,
+            trimmedTitle,
+            trimmedDescription
+        );
+
+        try {
+            const priorityPrediction = await predictComplaintPriority(
+                trimmedTitle,
+                trimmedDescription,
+                category,
+                req.file?.buffer,
+                req.file?.mimetype
+            );
+            predictedPriority = priorityPrediction.suggestedPriority;
+        } catch (error) {
+            // AI is a suggestion layer; rule-based priority remains the safe fallback.
+        }
+
         const complaintData = {
             title: trimmedTitle,
             description: trimmedDescription,
             category,
-            priority: calculatePriority(category, trimmedTitle, trimmedDescription),
+            priority: predictedPriority,
             reportedBy: req.user.id,
             assignedDepartment: getDepartmentForCategory(category),
             assignedAt: new Date(),
