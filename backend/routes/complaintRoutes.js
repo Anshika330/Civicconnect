@@ -7,7 +7,8 @@ const {
     getComplaintById,
     updateComplaintStatus,
     updateComplaintPriority,
-    assignComplaint
+    assignComplaint,
+    classifyComplaintImage
 } = require("../controllers/complaintController");
 const { authenticate, authorizeRoles } = require("../middleware/authMiddleware");
 const { upload, handleUploadError } = require("../middleware/uploadMiddleware");
@@ -21,6 +22,15 @@ router.post(
     upload.single("image"),
     handleUploadError,
     createComplaint
+);
+
+router.post(
+    "/classify-image",
+    authenticate,
+    authorizeRoles("citizen"),
+    upload.single("image"),
+    handleUploadError,
+    classifyComplaintImage
 );
 
 router.get("/my", authenticate, getMyComplaints);

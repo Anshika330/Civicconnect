@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { createComplaint } from '../services/complaintService'
+import { useEffect, useRef, useState } from 'react'
+import { classifyComplaintImage, createComplaint } from '../services/complaintService'
 
 const allowedImageTypes = ['image/jpeg', 'image/png', 'image/webp']
 const maxImageSize = 5 * 1024 * 1024
@@ -20,6 +20,10 @@ function ReportComplaint({ onLogout, navigate }) {
   const [duplicateReference, setDuplicateReference] = useState(null)
   const [loading, setLoading] = useState(false)
   const [capturingLocation, setCapturingLocation] = useState(false)
+  const [classificationLoading, setClassificationLoading] = useState(false)
+  const [classification, setClassification] = useState(null)
+  const [classificationError, setClassificationError] = useState('')
+  const classificationRequestRef = useRef(0)
 
   useEffect(() => {
     return () => {
@@ -34,9 +38,13 @@ function ReportComplaint({ onLogout, navigate }) {
     }))
   }
 
-  const handleImage = (event) => {
+  const handleImage = async (event) => {
     const file = event.target.files?.[0]
+    const requestId = classificationRequestRef.current + 1
+    classificationRequestRef.current = requestId
     setError('')
+    setClassificationError('')
+    setClassification(null)
 
     if (!file) return
     if (!allowedImageTypes.includes(file.type)) {
@@ -53,12 +61,47 @@ function ReportComplaint({ onLogout, navigate }) {
     if (imagePreview) URL.revokeObjectURL(imagePreview)
     setImage(file)
     setImagePreview(URL.createObjectURL(file))
+    setClassificationLoading(true)
+
+    try {
+      const result = await classifyComplaintImage(file)
+      if (classificationRequestRef.current === requestId) {
+        setClassification({
+          suggestedCategory: result.suggestedCategory,
+          confidence: result.confidence,
+          reason: result.reason
+        })
+      }
+    } catch (requestError) {
+      if (classificationRequestRef.current === requestId) {
+        setClassificationError(
+          requestError.message ||
+          'Image classification is unavailable. You can continue manually.'
+        )
+      }
+    } finally {
+      if (classificationRequestRef.current === requestId) {
+        setClassificationLoading(false)
+      }
+    }
   }
 
   const removeImage = () => {
+    classificationRequestRef.current += 1
     if (imagePreview) URL.revokeObjectURL(imagePreview)
     setImage(null)
     setImagePreview('')
+    setClassification(null)
+    setClassificationError('')
+    setClassificationLoading(false)
+  }
+
+  const acceptSuggestion = () => {
+    if (!classification?.suggestedCategory) return
+    setForm((current) => ({
+      ...current,
+      category: classification.suggestedCategory
+    }))
   }
 
   const captureLocation = () => {
@@ -250,6 +293,36 @@ function ReportComplaint({ onLogout, navigate }) {
               <option value="Streetlight">Streetlight</option>
               <option value="Other">Other</option>
             </select>
+
+            {classificationLoading && (
+              <div className="classification-status" role="status">
+                Classifying image...
+              </div>
+            )}
+
+            {classificationError && (
+              <div className="classification-error" role="status">
+                {classificationError} You can continue manually.
+              </div>
+            )}
+
+            {classification && (
+              <div className="classification-suggestion" role="status">
+                <div>
+                  <strong>AI suggested category: {classification.suggestedCategory}</strong>
+                  <p>Confidence: {Math.round(classification.confidence * 100)}%</p>
+                  {classification.reason && <p>{classification.reason}</p>}
+                </div>
+                <div className="classification-actions">
+                  <button type="button" onClick={acceptSuggestion}>
+                    Use suggestion
+                  </button>
+                  <button type="button" onClick={() => setClassification(null)}>
+                    Ignore
+                  </button>
+                </div>
+              </div>
+            )}
 
             <fieldset className="report-fieldset">
               <legend>Image (optional)</legend>

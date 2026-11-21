@@ -77,3 +77,14 @@ export const createComplaint = ({ title, description, category, image, location 
     body: formData
   })
 }
+
+export const classifyComplaintImage = (image) => {
+  const formData = new FormData()
+  formData.set('image', image)
+
+  return apiRequest('/api/complaints/classify-image', {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: formData
+  })
+}

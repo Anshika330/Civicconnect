@@ -4,6 +4,10 @@ const mongoose = require("mongoose");
 const { getDepartmentForCategory } = require("../utils/departmentMapping");
 const { calculatePriority } = require("../utils/priorityMapping");
 const { findBestDuplicate } = require("../utils/duplicateDetection");
+const {
+    classifyCivicImage,
+    ClassificationError
+} = require("../services/imageClassificationService");
 
 const allowedCategories = ["Road", "Garbage", "Water", "Streetlight", "Other"];
 const allowedStatuses = ["Pending", "In Progress", "Resolved", "Rejected"];
@@ -840,6 +844,71 @@ const assignComplaint = async (req, res) => {
     }
 };
 
+const classifyComplaintImage = async (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({
+            success: false,
+            message: "An image is required"
+        });
+    }
+
+    try {
+        const result = await classifyCivicImage(
+            req.file.buffer,
+            req.file.mimetype
+        );
+
+        return res.status(200).json({
+            success: true,
+            suggestedCategory: result.suggestedCategory,
+            confidence: result.confidence,
+            reason: result.reason
+        });
+    } catch (error) {
+        if (error instanceof ClassificationError) {
+            if (error.code === "CLASSIFICATION_NOT_CONFIGURED") {
+                return res.status(503).json({
+                    success: false,
+                    message: "Image classification service is not configured"
+                });
+            }
+
+            if (
+                error.code === "INVALID_IMAGE" ||
+                error.code === "IMAGE_TOO_LARGE" ||
+                error.code === "INVALID_IMAGE_TYPE"
+            ) {
+                return res.status(400).json({
+                    success: false,
+                    message: error.message
+                });
+            }
+
+            if (
+                error.code === "MALFORMED_CLASSIFICATION_RESPONSE" ||
+                error.code === "INVALID_CLASSIFICATION_CATEGORY" ||
+                error.code === "INVALID_CLASSIFICATION_CONFIDENCE" ||
+                error.code === "INVALID_CLASSIFICATION_REASON"
+            ) {
+                return res.status(502).json({
+                    success: false,
+                    message: "Image classification returned an invalid result"
+                });
+            }
+
+            return res.status(502).json({
+                success: false,
+                message: "Unable to classify the image"
+            });
+        }
+
+        return res.status(500).json({
+            success: false,
+            message: "Unable to classify the image"
+        });
+    }
+};
+
 module.exports = {
     createComplaint,
     getMyComplaints,
@@ -848,5 +917,6 @@ module.exports = {
     getComplaintById,
     updateComplaintStatus,
     updateComplaintPriority,
-    assignComplaint
+    assignComplaint,
+    classifyComplaintImage
 };
