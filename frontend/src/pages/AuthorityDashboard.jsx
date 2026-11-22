@@ -408,6 +408,11 @@ function AuthorityDashboard({ user, onLogout }) {
                     <tr key={complaint._id}>
                       <td>
                         <strong>{complaint.title}</strong>
+                        {complaint.isPossibleDuplicate === true && (
+                          <span className="duplicate-badge authority-table-duplicate-badge">
+                            Possible Duplicate
+                          </span>
+                        )}
                       </td>
                       <td>{complaint.category}</td>
                       <td>

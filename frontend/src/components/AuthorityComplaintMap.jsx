@@ -132,6 +132,11 @@ function AuthorityComplaintMap({
                     />
                   )}
                   <strong>{complaint.title}</strong>
+                  {complaint.isPossibleDuplicate === true && (
+                    <span className="duplicate-badge map-duplicate-badge">
+                      Possible Duplicate
+                    </span>
+                  )}
                   {complaint.description && (
                     <p className="map-popup-description">{complaint.description}</p>
                   )}
