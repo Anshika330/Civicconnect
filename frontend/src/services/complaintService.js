@@ -54,6 +54,11 @@ export const getMyComplaints = (page = 1, limit = 10) =>
     headers: getAuthHeaders()
   })
 
+export const getComplaintById = (id) =>
+  apiRequest(`/api/complaints/${id}`, {
+    headers: getAuthHeaders()
+  })
+
 export const createComplaint = ({ title, description, category, image, location }) => {
   const formData = new FormData()
   formData.set('title', title)

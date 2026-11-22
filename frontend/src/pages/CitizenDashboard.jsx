@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { io } from 'socket.io-client'
-import { getMyComplaints } from '../services/complaintService'
+import { getComplaintById, getMyComplaints } from '../services/complaintService'
 import { getSession } from '../services/authStorage'
 
 function CitizenDashboard({ user, onLogout, navigate }) {
@@ -13,6 +13,10 @@ function CitizenDashboard({ user, onLogout, navigate }) {
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [expandedComplaintId, setExpandedComplaintId] = useState(null)
+  const [detailsById, setDetailsById] = useState({})
+  const [detailsLoadingId, setDetailsLoadingId] = useState(null)
+  const [detailsError, setDetailsError] = useState('')
 
   useEffect(() => {
     let active = true
@@ -53,8 +57,8 @@ function CitizenDashboard({ user, onLogout, navigate }) {
     const handleStatusUpdate = (update) => {
       if (!update?.complaintId || !update.status) return
 
-      setComplaints((currentComplaints) =>
-        currentComplaints.map((complaint) =>
+      setComplaints((currentComplaints) => {
+        return currentComplaints.map((complaint) =>
           String(complaint._id) === String(update.complaintId)
             ? {
                 ...complaint,
@@ -63,7 +67,44 @@ function CitizenDashboard({ user, onLogout, navigate }) {
               }
             : complaint
         )
-      )
+      })
+
+      setDetailsById((currentDetails) => {
+        const complaintId = String(update.complaintId)
+        const existing = currentDetails[complaintId]
+        if (!existing?.complaint) return currentDetails
+
+        const history = Array.isArray(existing.complaint.statusHistory)
+          ? existing.complaint.statusHistory
+          : []
+        const alreadyPresent = history.some((entry) =>
+          entry.status === update.status &&
+          update.updatedAt &&
+          String(entry.changedAt) === String(update.updatedAt)
+        )
+
+        return {
+          ...currentDetails,
+          [complaintId]: {
+            ...existing,
+            complaint: {
+              ...existing.complaint,
+              status: update.status,
+              updatedAt: update.updatedAt || existing.complaint.updatedAt,
+              statusHistory: alreadyPresent
+                ? history
+                : [
+                    ...history,
+                    {
+                      status: update.status,
+                      changedAt: update.updatedAt || new Date().toISOString(),
+                      changedBy: null
+                    }
+                  ]
+            }
+          }
+        }
+      })
     }
 
     socket.on('complaintStatusUpdated', handleStatusUpdate)
@@ -86,6 +127,45 @@ function CitizenDashboard({ user, onLogout, navigate }) {
   const changePage = (page) => {
     setLoading(true)
     setPagination((current) => ({ ...current, page }))
+  }
+
+  const toggleComplaintDetails = async (complaintId) => {
+    if (expandedComplaintId === complaintId) {
+      setExpandedComplaintId(null)
+      setDetailsError('')
+      return
+    }
+
+    setExpandedComplaintId(complaintId)
+    setDetailsError('')
+
+    if (detailsById[complaintId]) return
+
+    setDetailsLoadingId(complaintId)
+    try {
+      const response = await getComplaintById(complaintId)
+      setDetailsById((current) => ({
+        ...current,
+        [complaintId]: response.data
+      }))
+    } catch (requestError) {
+      setDetailsError(requestError.message)
+    } finally {
+      setDetailsLoadingId(null)
+    }
+  }
+
+  const getSortedStatusHistory = (complaint) => {
+    if (!Array.isArray(complaint?.statusHistory) || complaint.statusHistory.length === 0) {
+      return []
+    }
+
+    return [...complaint.statusHistory].sort((first, second) => {
+      const firstTime = new Date(first.changedAt).getTime()
+      const secondTime = new Date(second.changedAt).getTime()
+      if (Number.isNaN(firstTime) || Number.isNaN(secondTime)) return 0
+      return firstTime - secondTime
+    })
   }
 
   return (
@@ -163,6 +243,98 @@ function CitizenDashboard({ user, onLogout, navigate }) {
                       {complaint.assignedDepartment || 'Department pending'}
                     </p>
                     <small>Reported {formatDate(complaint.createdAt)}</small>
+
+                    <button
+                      type="button"
+                      className="track-progress-button"
+                      onClick={() => toggleComplaintDetails(complaint._id)}
+                    >
+                      {expandedComplaintId === complaint._id
+                        ? 'Hide Progress'
+                        : 'Track Progress'}
+                    </button>
+
+                    {expandedComplaintId === complaint._id && (
+                      <div className="complaint-progress-details">
+                        {detailsLoadingId === complaint._id && (
+                          <div className="progress-loading">Loading complaint details...</div>
+                        )}
+
+                        {detailsError && expandedComplaintId === complaint._id && (
+                          <div className="progress-error" role="alert">
+                            {detailsError}
+                          </div>
+                        )}
+
+                        {detailsById[complaint._id]?.complaint && (() => {
+                          const details = detailsById[complaint._id].complaint
+                          const history = getSortedStatusHistory(details)
+
+                          return (
+                            <>
+                              {details.image?.url && (
+                                <img
+                                  src={details.image.url}
+                                  alt=""
+                                  className="progress-detail-image"
+                                />
+                              )}
+                              <dl className="progress-detail-grid">
+                                <div>
+                                  <dt>Description</dt>
+                                  <dd>{details.description || 'No description provided.'}</dd>
+                                </div>
+                                <div>
+                                  <dt>Location</dt>
+                                  <dd>
+                                    {Array.isArray(details.location?.coordinates) &&
+                                    details.location.coordinates.length === 2
+                                      ? `Longitude ${details.location.coordinates[0]}, Latitude ${details.location.coordinates[1]}`
+                                      : 'No GPS location provided.'}
+                                  </dd>
+                                </div>
+                                <div>
+                                  <dt>Assigned department</dt>
+                                  <dd>{details.assignedDepartment || 'Department pending'}</dd>
+                                </div>
+                              </dl>
+
+                              {history.length > 0 ? (
+                                <div className="status-timeline" aria-label="Complaint progress timeline">
+                                  {history.map((entry, index) => (
+                                    <div
+                                      className="timeline-entry"
+                                      key={`${entry.status}-${entry.changedAt || index}`}
+                                    >
+                                      <span className={`timeline-dot timeline-${entry.status.toLowerCase().replaceAll(' ', '-')}`} />
+                                      <div>
+                                        <strong>{entry.status}</strong>
+                                        {entry.changedAt && (
+                                          <small>
+  {new Date(entry.changedAt).toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true
+  })}
+</small>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="timeline-empty">
+                                  Status history is not available for this complaint yet.
+                                </p>
+                              )}
+                            </>
+                          )
+                        })()}
+                      </div>
+                    )}
                   </div>
                 </article>
               ))}

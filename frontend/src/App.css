@@ -827,6 +827,159 @@
   gap: 16px;
 }
 
+.track-progress-button {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid #1764b1;
+  border-radius: 8px;
+  margin-top: 14px;
+  color: #1764b1;
+  background: #fff;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.track-progress-button:hover {
+  color: #fff;
+  background: #1764b1;
+}
+
+.complaint-progress-details {
+  margin-top: 14px;
+  border-top: 1px solid #e4edf6;
+  padding-top: 14px;
+}
+
+.progress-loading,
+.progress-error,
+.timeline-empty {
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.progress-loading {
+  color: #47627e;
+  background: #f2f7fc;
+}
+
+.progress-error {
+  color: #9d252f;
+  background: #fff2f3;
+}
+
+.timeline-empty {
+  color: #68758a;
+  background: #f7f9fc;
+}
+
+.progress-detail-image {
+  width: 100%;
+  max-height: 180px;
+  display: block;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  object-fit: cover;
+}
+
+.progress-detail-grid {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 16px;
+}
+
+.progress-detail-grid div {
+  min-width: 0;
+}
+
+.progress-detail-grid dt {
+  color: #68758a;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.progress-detail-grid dd {
+  margin: 3px 0 0;
+  color: #344258;
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.status-timeline {
+  position: relative;
+  display: grid;
+  gap: 14px;
+  margin-top: 4px;
+  padding-left: 18px;
+}
+
+.status-timeline::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 7px;
+  bottom: 7px;
+  width: 2px;
+  background: #d8e4f0;
+}
+
+.timeline-entry {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.timeline-dot {
+  position: absolute;
+  left: -18px;
+  top: 4px;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #1764b1;
+  box-shadow: 0 0 0 1px #1764b1;
+}
+
+.timeline-dot.timeline-pending {
+  background: #d8a217;
+  box-shadow: 0 0 0 1px #d8a217;
+}
+
+.timeline-dot.timeline-in-progress {
+  background: #1764b1;
+  box-shadow: 0 0 0 1px #1764b1;
+}
+
+.timeline-dot.timeline-resolved {
+  background: #2f855a;
+  box-shadow: 0 0 0 1px #2f855a;
+}
+
+.timeline-dot.timeline-rejected {
+  background: #b42318;
+  box-shadow: 0 0 0 1px #b42318;
+}
+
+.timeline-entry strong,
+.timeline-entry small {
+  display: block;
+}
+
+.timeline-entry strong {
+  color: #344258;
+  font-size: 13px;
+}
+
+.timeline-entry small {
+  margin-top: 2px;
+  color: #68758a;
+}
+
 .report-layout {
   max-width: 820px;
 }
