@@ -281,7 +281,14 @@ const createComplaint = async (req, res) => {
             assignedAt: new Date(),
             assignedBy: null,
             isPossibleDuplicate: false,
-            duplicateOf: null
+            duplicateOf: null,
+            statusHistory: [
+                {
+                    status: "Pending",
+                    changedAt: new Date(),
+                    changedBy: req.user.id
+                }
+            ]
         };
 
         if (location !== undefined) {
@@ -680,18 +687,37 @@ const updateComplaintStatus = async (req, res) => {
             });
         }
 
-        const complaint = await Complaint.findByIdAndUpdate(
-            id,
-            { status },
-            { new: true, runValidators: true }
-        );
-
-        if (!complaint) {
+        const existingComplaint = await Complaint.findById(id);
+        if (!existingComplaint) {
             return res.status(404).json({
                 success: false,
                 message: "Complaint not found"
             });
         }
+
+        if (existingComplaint.status === status) {
+            return res.status(200).json({
+                success: true,
+                message: "Complaint status updated successfully",
+                data: {
+                    complaint: existingComplaint
+                }
+            });
+        }
+
+        existingComplaint.status = status;
+        existingComplaint.statusHistory = [
+            ...(Array.isArray(existingComplaint.statusHistory)
+                ? existingComplaint.statusHistory
+                : []),
+            {
+                status,
+                changedAt: new Date(),
+                changedBy: req.user.id
+            }
+        ];
+
+        const complaint = await existingComplaint.save();
 
         const io = req.app.get("io");
         if (io) {

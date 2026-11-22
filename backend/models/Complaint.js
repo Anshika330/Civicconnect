@@ -29,6 +29,26 @@ const locationSchema = new mongoose.Schema(
     { _id: false }
 );
 
+const statusHistorySchema = new mongoose.Schema(
+    {
+        status: {
+            type: String,
+            enum: ["Pending", "In Progress", "Resolved", "Rejected"],
+            required: true
+        },
+        changedAt: {
+            type: Date,
+            default: Date.now
+        },
+        changedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            default: null
+        }
+    },
+    { _id: false }
+);
+
 const complaintSchema = new mongoose.Schema(
     {
         title: {
@@ -103,6 +123,10 @@ const complaintSchema = new mongoose.Schema(
             type: mongoose.Schema.Types.ObjectId,
             ref: "Complaint",
             default: null
+        },
+        statusHistory: {
+            type: [statusHistorySchema],
+            default: []
         }
     },
     {
