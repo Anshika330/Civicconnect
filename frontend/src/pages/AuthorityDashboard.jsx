@@ -375,7 +375,14 @@ function AuthorityDashboard({ user, onLogout }) {
           </div>
 
           {!loading && !mapLoading && (
-            <AuthorityComplaintMap complaints={mapComplaints} />
+            <AuthorityComplaintMap
+              complaints={mapComplaints}
+              statusOptions={statusOptions}
+              priorityOptions={priorityOptions}
+              departmentOptions={departmentOptions}
+              actionId={actionId}
+              onAction={runAction}
+            />
           )}
 
           {loading ? (

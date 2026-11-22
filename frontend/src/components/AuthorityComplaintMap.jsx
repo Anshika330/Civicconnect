@@ -27,7 +27,14 @@ function FitComplaintBounds({ positions }) {
   return null
 }
 
-function AuthorityComplaintMap({ complaints = [] }) {
+function AuthorityComplaintMap({
+  complaints = [],
+  statusOptions = [],
+  priorityOptions = [],
+  departmentOptions = [],
+  actionId = '',
+  onAction
+}) {
   const mappedComplaints = complaints
     .map((complaint) => {
       const coordinates = complaint.location?.coordinates
@@ -117,11 +124,67 @@ function AuthorityComplaintMap({ complaints = [] }) {
             >
               <Popup>
                 <div className="complaint-map-popup">
+                  {complaint.image?.url && (
+                    <img
+                      className="map-popup-image"
+                      src={complaint.image.url}
+                      alt=""
+                    />
+                  )}
                   <strong>{complaint.title}</strong>
-                  <span>Category: {complaint.category}</span>
-                  <span>Status: {complaint.status}</span>
-                  <span>Priority: {complaint.priority}</span>
-                  <span>Department: {complaint.assignedDepartment || 'Unassigned'}</span>
+                  {complaint.description && (
+                    <p className="map-popup-description">{complaint.description}</p>
+                  )}
+                  <span><b>Category:</b> {complaint.category}</span>
+
+                  <label>
+                    Status
+                    <select
+                      className="map-popup-select"
+                      value={complaint.status}
+                      disabled={actionId === complaint._id}
+                      onChange={(event) =>
+                        onAction?.(complaint._id, 'status', event.target.value)
+                      }
+                    >
+                      {statusOptions.map((status) => (
+                        <option key={status} value={status}>{status}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    Priority
+                    <select
+                      className="map-popup-select"
+                      value={complaint.priority}
+                      disabled={actionId === complaint._id}
+                      onChange={(event) =>
+                        onAction?.(complaint._id, 'priority', event.target.value)
+                      }
+                    >
+                      {priorityOptions.map((priority) => (
+                        <option key={priority} value={priority}>{priority}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    Department
+                    <select
+                      className="map-popup-select"
+                      value={complaint.assignedDepartment || ''}
+                      disabled={actionId === complaint._id}
+                      onChange={(event) =>
+                        onAction?.(complaint._id, 'department', event.target.value)
+                      }
+                    >
+                      <option value="">Unassigned</option>
+                      {departmentOptions.map((department) => (
+                        <option key={department} value={department}>{department}</option>
+                      ))}
+                    </select>
+                  </label>
                 </div>
               </Popup>
             </CircleMarker>
