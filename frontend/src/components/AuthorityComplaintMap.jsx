@@ -35,30 +35,37 @@ function AuthorityComplaintMap({
   actionId = '',
   onAction
 }) {
-  const mappedComplaints = complaints
-    .map((complaint) => {
-      const coordinates = complaint.location?.coordinates
-      if (!Array.isArray(coordinates) || coordinates.length !== 2) {
-        return null
-      }
+const groupedComplaints = new Map();
+complaints.forEach((complaint) => {
+  const coordinates = complaint.location?.coordinates;
+  if (!Array.isArray(coordinates) || coordinates.length !== 2) {
+    return;
+  }
+  const longitude = Number(coordinates[0]);
+  const latitude = Number(coordinates[1]);
+  if (
+    !Number.isFinite(longitude) ||
+    !Number.isFinite(latitude) ||
+    longitude < -180 ||
+    longitude > 180 ||
+    latitude < -90 ||
+    latitude > 90
+  ) {
+    return;
+  }
+  const position = [latitude, longitude];
+  const coordinateKey = `${latitude},${longitude}`;
+  if (!groupedComplaints.has(coordinateKey)) {
+    groupedComplaints.set(coordinateKey, {
+      position,
+      complaints: []
+    });
+  }
+  groupedComplaints.get(coordinateKey).complaints.push(complaint);
+});
 
-      const longitude = Number(coordinates[0])
-      const latitude = Number(coordinates[1])
+const mappedComplaints = Array.from(groupedComplaints.values());
 
-      if (
-        !Number.isFinite(longitude) ||
-        !Number.isFinite(latitude) ||
-        longitude < -180 ||
-        longitude > 180 ||
-        latitude < -90 ||
-        latitude > 90
-      ) {
-        return null
-      }
-
-      return { complaint, position: [latitude, longitude] }
-    })
-    .filter(Boolean)
 
   const positions = mappedComplaints.map((item) => item.position)
   const center = positions[0] || defaultCenter
@@ -107,94 +114,140 @@ function AuthorityComplaintMap({
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <FitComplaintBounds positions={positions} />
-        {mappedComplaints.map(({ complaint, position }) => {
-          const color = priorityColors[complaint.priority] || '#1764b1'
+        
+{mappedComplaints.map((group) => {
+  const priorityOrder = {
+    Critical: 4,
+    High: 3,
+    Medium: 2,
+    Low: 1
+  };
 
-          return (
-            <CircleMarker
-              key={complaint._id}
-              center={position}
-              radius={9}
-              pathOptions={{
-                color,
-                fillColor: color,
-                fillOpacity: 0.85,
-                weight: 2
-              }}
-            >
-              <Popup>
-                <div className="complaint-map-popup">
-                  {complaint.image?.url && (
-                    <img
-                      className="map-popup-image"
-                      src={complaint.image.url}
-                      alt=""
-                    />
-                  )}
-                  <strong>{complaint.title}</strong>
-                  {complaint.isPossibleDuplicate === true && (
-                    <span className="duplicate-badge map-duplicate-badge">
-                      Possible Duplicate
-                    </span>
-                  )}
-                  {complaint.description && (
-                    <p className="map-popup-description">{complaint.description}</p>
-                  )}
-                  <span><b>Category:</b> {complaint.category}</span>
+  const highestPriorityComplaint = group.complaints.reduce(
+    (highest, current) =>
+      (priorityOrder[current.priority] || 0) >
+      (priorityOrder[highest.priority] || 0)
+        ? current
+        : highest
+  );
 
-                  <label>
-                    Status
-                    <select
-                      className="map-popup-select"
-                      value={complaint.status}
-                      disabled={actionId === complaint._id}
-                      onChange={(event) =>
-                        onAction?.(complaint._id, 'status', event.target.value)
-                      }
-                    >
-                      {statusOptions.map((status) => (
-                        <option key={status} value={status}>{status}</option>
-                      ))}
-                    </select>
-                  </label>
+  const color =
+    priorityColors[highestPriorityComplaint.priority] || "#1764b1";
 
-                  <label>
-                    Priority
-                    <select
-                      className="map-popup-select"
-                      value={complaint.priority}
-                      disabled={actionId === complaint._id}
-                      onChange={(event) =>
-                        onAction?.(complaint._id, 'priority', event.target.value)
-                      }
-                    >
-                      {priorityOptions.map((priority) => (
-                        <option key={priority} value={priority}>{priority}</option>
-                      ))}
-                    </select>
-                  </label>
+  return (
+    <CircleMarker
+      key={group.position.join(",")}
+      center={group.position}
+      radius={group.complaints.length > 1 ? 12 : 9}
+      pathOptions={{
+        color,
+        fillColor: color,
+        fillOpacity: 0.85,
+        weight: 2
+      }}
+    >
+      <Popup>
+        <div className="complaint-map-popup">
+          {group.complaints.length > 1 && (
+            <strong>
+              {group.complaints.length} Complaints at this location
+            </strong>
+          )}
 
-                  <label>
-                    Department
-                    <select
-                      className="map-popup-select"
-                      value={complaint.assignedDepartment || ''}
-                      disabled={actionId === complaint._id}
-                      onChange={(event) =>
-                        onAction?.(complaint._id, 'department', event.target.value)
-                      }
-                    >
-                      <option value="">Unassigned</option>
-                      {departmentOptions.map((department) => (
-                        <option key={department} value={department}>{department}</option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-              </Popup>
-            </CircleMarker>
-          )
-        })}
+          {group.complaints.map((complaint) => (
+            <div key={complaint._id} className="map-complaint-item">
+              {complaint.image?.url && (
+                <img
+                  className="map-popup-image"
+                  src={complaint.image.url}
+                  alt=""
+                />
+              )}
+
+              <strong>{complaint.title}</strong>
+
+              {complaint.isPossibleDuplicate === true && (
+                <span className="duplicate-badge map-duplicate-badge">
+                  Possible Duplicate
+                </span>
+              )}
+
+              {complaint.description && (
+                <p className="map-popup-description">
+                  {complaint.description}
+                </p>
+              )}
+
+              <span>
+                <b>Category:</b> {complaint.category}
+              </span>
+
+              <label>
+                Status
+                <select
+                  className="map-popup-select"
+                  value={complaint.status}
+                  disabled={actionId === complaint._id}
+                  onChange={(event) =>
+                    onAction?.(complaint._id, "status", event.target.value)
+                  }
+                >
+                  {statusOptions.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                Priority
+                <select
+                  className="map-popup-select"
+                  value={complaint.priority}
+                  disabled={actionId === complaint._id}
+                  onChange={(event) =>
+                    onAction?.(complaint._id, "priority", event.target.value)
+                  }
+                >
+                  {priorityOptions.map((priority) => (
+                    <option key={priority} value={priority}>
+                      {priority}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                Department
+                <select
+                  className="map-popup-select"
+                  value={complaint.assignedDepartment || ""}
+                  disabled={actionId === complaint._id}
+                  onChange={(event) =>
+                    onAction?.(
+                      complaint._id,
+                      "department",
+                      event.target.value
+                    )
+                  }
+                >
+                  <option value="">Unassigned</option>
+                  {departmentOptions.map((department) => (
+                    <option key={department} value={department}>
+                      {department}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          ))}
+        </div>
+      </Popup>
+    </CircleMarker>
+  );
+})}
+
       </MapContainer>
     </section>
   )
